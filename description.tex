@@ -1,0 +1,158 @@
+\documentclass[a4paper]{article}
+
+%% Language and font encodings
+\usepackage[english]{babel}
+\usepackage[utf8x]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsfonts}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{listings}
+
+%% Sets page size and margins
+\usepackage[a4paper,top=3cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+%% Useful packages
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{graphicx}
+\graphicspath{ {./images/} }
+\usepackage[colorinlistoftodos]{todonotes}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+%% Table packages
+\usepackage{array}
+\newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
+\usepackage{multirow}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\title{Project - Heat Equation solver \vspace{-0.5em}}
+\author{Jesica Leticia Gonzalez Robles \vspace{-0.5em}}
+\date{}
+\begin{document}
+\maketitle
+In this project, a heat equation solver was implemented through the finite differences method and the Conjugate Gradient algorithm.\\
+
+The physical system of study was a pipe within which hot and cold fluids were transferred with temperatures $T_{h}$ and $T_c$, respectively. The goal was to determine the temperature distribution within the pipe walls. A simplified 2D geometry was used to model the pipe walls, defined by an equally spaced cartesian grid. \\
+
+The project was divided into two main parts:
+\begin{enumerate}
+    \item Linear system of equations solver (C++)
+    \item Heat equation solver with boundary conditions using an Object Oriented Programming (OOP design) and solution post-processing (Python3).
+\end{enumerate}
+
+
+\section{Conjugate Gradient Solver}
+
+A solver for the system of equations defined as $Ax = b $ was solved in C++ from a given matrix $A$ in CSR format (sparse matrix) using the \textit{Conjugate Gradient (CG)} algorithm ( see Algorithm 1 pseudocode).
+
+\begin{algorithm}
+\caption{Conjugate Gradient's Algorithm}\label{alg:CG}
+\begin{algorithmic}
+\Procedure{CGSolver}{$A, \vec{x}, tol$}
+\State $\vec{x}_{0} = 1; \vec{b} = 0$ \Comment{Initialize $x_{0}$ and b. b does not change.}
+\State $\vec{r}_{0} = \vec{b} - A\vec{x}_{0}$
+\State $L2normr0 = L2norm(\vec{r}_{0})$
+\State $\vec{p}_{0} = \vec{r}_{0} ; niter = 0$
+\While{$niter < niter_{max}$}\Comment{Maximum number of iterations is not reached.}
+\State $niter = niter +1$
+\State $\alpha_{n} = \vec{r_{n}}^{T}\vec{r_{n}}{\vec{p_{n}}^{T}A\vec{p_{n}}}$
+\State $x_{n+1} = x_{n} + \alpha p_{n} ; r_{n+1} = r_{n} - \alpha A p_{n}$
+\State $L2normr = L2norm(\vec{r}_{n+1})$
+\If{L2normr / L2normr0 < tol} \Comment{Convergence is reached.}
+\State \textbf{break}
+\EndIf
+\State $\beta_{n} = \vec{r}_{n+1}^{T}\vec{r}_{n+1} / \vec{r}_{n}^{T}\vec{r}_{n}$
+\State $p_{n+1} = r_{n+1} - \beta_{n}p_{n}$
+\EndWhile
+\State \textbf{return} $niter$\Comment{Returns $niter$ if the algorithm converged or $-1$ if not.}
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+
+\noindent
+The implementation is divided into the following files: \textit{main.cpp}, \textit{CGSolver.cpp}, \textit{COO2CSR.cpp}, and \textit{matvecops.cpp}, with the corresponding HPP files for the last three. In addition, a \textit{makefile} is provided to compile and execute the program.\\
+
+The \textit{matvecops.cpp} file contains useful functions to perform common matrix and vector operations, such as: substraction of two vectors, addition of two vectors, product of an scalar times a vector, transpose of a vector (expressing it in CSR format) and the product of a matrix in CSR format times a vector. The transpose of a vector was set to return the result in CSR format for it to be useful later on with the first implemented CSR matrix -vector function, since a vector could be seen as a $n x 1 $ matrix. In addition, an L2norm function is implemented to compute the norm of a vector, given as the square root of the dot product of to vectors ($\sqrt{\vec{r}^{T}\cdot\vec{r}}$).\\
+
+The \textit{COO2CSR.cpp} file transforms a matrix $A$ in the usual COO format to CSR format. This is useful to operate an initial given matrix, which contains all the system of equation values (derived from the finite differences method). This file was given by the CME211 teaching team. [1] \\
+
+The \textit{CGSolver.cpp} file contains the implementation of the \textit{CG} algorithm for the system $A*x = b$. It initializes the $x$ solution's vector with ones and the $b$ vector with zeros. Then it computes an initial vector $r_{0}$ and its L2norm, which will be updated according to the \textit{CG} algorithm described above. It is important to notice that each matrix-vector or vector-vector product is done separately before performing further operations, for example, for $\beta$ and $\alpha$, to avoid problems related to the resulting vector/matrix dimensions (recall that matrix- matrix and matrix-vector product does not commute i.e. $Ax \neq xA$ ). Finally, the function returns the total number of iterations that are needed to reach convergence for the given tolerance value. Otherwise, the function returns $-1$ if the algorithm doesn't converge. \\
+
+The \textit{main.cpp} is executed with two arguments provided by the user in the terminal: \texttt{\$./main matrix.txt solution.txt\$}. This file reads the given matrix file, converts it to CSR format and executes the \textit{CGSolver} function. Finally, it stores the solution vector in the specified file and shows the final number of iterations to reach convergence. 
+
+\section{Finite Differences \& Post Processing}
+
+The goal of the second part of this work was to assemble the system of equations derived from the discretization of the 2D steady state heat equation for a given geometry. The discretization derived in one equation per grid point, assembled in the $A$ matrix. The boundary conditions used were: cold isothermal boundary for the lower part of the grid (last row), periodic boundary conditions for the sides of the grid, and hot isothermal boundary conditions for the top of the grid (first row).\\
+
+The OOP implementation is divided into the following files:\\ \textit{main.cpp}, \textit{CGSolver.cpp}, \textit{COO2CSR.cpp},\textit{matvecops.cpp}, \textit{heat.cpp}, and \textit{sparse.cpp}, with the corresponding HPP files for the last three. In addition, post-processing script \textit{postprocess.py} is provided to read an input and a solution file, plot the solution vector, and the temperature distribution within the pipe. Finally, a \textit{makefile} is provided to compile and execute the program.\\
+
+Two classes were created: \texttt{SparseMatrix} and \texttt{HeatEquation2D}. The \texttt{SparseMatrix} class defines a sparse matrix object, which data attributes correspond to the vectors defining the matrix. The methods contained in this class perform the necessary tasks: setsize, resize, convert COO to CSR format, add entries, print matrix, and compute the product of a matrix times a vector. The \texttt{HeatEquation2D} class creates a SparseMatrix object, contains the data needed to form the system of equations from a given file, solves the system using the \textit{CGSolver} and returns the solution vector in a .txt file every 10 iterations. \\
+
+\textbf{Note:} The \texttt{Setup} method in \texttt{HeatEquation2D} creates a matrix in COO format, excluding the points at the upper and lower boundaries, as well as the right side boundary points since these last are set equal to the ones at the left boundary. Also, the matrix $A$ and solution vector $x$ are ordered by row, meaning that per each column, the unknowns are added to the matrix and vector in ascending order of the rows (top to buttom). A \textit{map} structure was used to relate the position indexes on the grid to the position of the unknowns in the solution vector. Values/variables such as the vector $b$, the number of equations, rows, columns, order, etc., were passed by reference as  \texttt{const} to avoid accidental modification of its values.\\
+
+\section{User Guide}
+
+\subsection{Compiling code}
+\noindent In the terminal, go to your working directory and type:
+\begin{lstlisting}[language=bash]
+  $ make clean // Removes all object file, editor files and main
+  $ make // Compile all source code and produce main
+\end{lstlisting}
+\subsection{Running Heat Equation Solver}
+Input
+\begin{lstlisting}[language=bash]
+  $ ./main input#.txt solution 
+\end{lstlisting}
+Expected output:
+\begin{lstlisting}[language=bash]
+  SUCCESS: CG solver converged in xx iterations.
+\end{lstlisting}
+\subsection{Post processing}
+Input
+\begin{lstlisting}[language=bash]
+  $ python3 postprocess.py input1.txt solution<#>.txt
+\end{lstlisting}
+Expected output:
+\begin{lstlisting}[language=bash]
+    Input file processed: input1.txt
+    Mean Temperature: xx.xxxxx
+\end{lstlisting}
+
+\section{Visualization}
+The \textit{postprocess.py} file generates a plot of the temperature distribution within the pipeline and saves it as a PNG file with the name \textit{"Temperature\_Distribution.png"}. The name can be modified at the end of the \texttt{Plot\_Solution} function according to your needs. 
+
+
+\begin{figure}[h]
+    \centering
+    \begin{subfigure}[b]{0.45\textwidth}
+         \centering
+         \includegraphics[width=7.5cm, height=5.8cm]{Temperature_Distribution1.png}
+         \caption{Temperature distribution for input1.txt (size = 150 x 50). Convergence reached in 129 iterations.}
+         \label{fig:1}
+     \end{subfigure}
+     \hfill
+     \begin{subfigure}[b]{0.45\textwidth}
+         \centering
+         \includegraphics[width=7.5cm, height=5.8cm]{Temperature_Distribution2.png}
+         \caption{Temperature distribution for input2.txt. (size = 200 x 60) Convergence reached in 154 iterations.}
+         \label{fig:2}
+     \end{subfigure}
+        \caption{Example outputs for \textit{postprocess.py}.}
+        \label{fig:three graphs}
+\end{figure}
+
+
+
+
+
+
+\section*{References}
+\begin{itemize}
+\item[1.] LeGresley, P. \textit{CME211: Project Part 1}. Modified for CME211 Fall 2022 by the teaching staff.
+\item[1.] LeGresley, P. \textit{CME211: Project Part 2}. Modified for CME211 Fall 2022 by the teaching staff.
+
+\end{document}
